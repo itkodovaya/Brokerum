@@ -1,0 +1,592 @@
+openapi: 3.0.0
+info:
+  title: Brokerum API
+  description: API для системы брокериджа заявок на кредитование и банковские гарантии
+  version: 1.0.0
+  contact:
+    name: Brokerum Support
+    email: support@brokerum.ru
+    url: https://brokerum.ru
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8080/api
+    description: Development server
+  - url: https://api.brokerum.ru/api
+    description: Production server
+
+security:
+  - BearerAuth: []
+
+paths:
+  /applications:
+    get:
+      summary: Получить список заявок
+      description: Возвращает список заявок с фильтрацией и пагинацией
+      tags:
+        - Applications
+      parameters:
+        - name: status
+          in: query
+          description: Фильтр по статусу
+          schema:
+            type: string
+            enum: [draft, submitted, in_review, approved, rejected, completed]
+        - name: page
+          in: query
+          description: Номер страницы
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          description: Количество записей на странице
+          schema:
+            type: integer
+            default: 10
+        - name: dateFrom
+          in: query
+          description: Дата от (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+        - name: dateTo
+          in: query
+          description: Дата до (YYYY-MM-DD)
+          schema:
+            type: string
+            format: date
+      responses:
+        '200':
+          description: Список заявок
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetApplicationsResponse'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+    post:
+      summary: Создать новую заявку
+      description: Создает новую заявку с данными анкеты
+      tags:
+        - Applications
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateApplicationRequest'
+      responses:
+        '201':
+          description: Заявка создана
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '500':
+          $ref: '#/components/responses/InternalServerError'
+
+  /applications/{id}:
+    get:
+      summary: Получить заявку по ID
+      description: Возвращает детальную информацию о заявке
+      tags:
+        - Applications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID заявки
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Данные заявки
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+    put:
+      summary: Обновить заявку
+      description: Обновляет данные конкретного шага заявки
+      tags:
+        - Applications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID заявки
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateApplicationRequest'
+      responses:
+        '200':
+          description: Заявка обновлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /applications/{id}/submit:
+    post:
+      summary: Отправить заявку
+      description: Отправляет заявку на рассмотрение в банки
+      tags:
+        - Applications
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID заявки
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Заявка отправлена
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Application'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /applications/{id}/files:
+    get:
+      summary: Получить файлы заявки
+      description: Возвращает список файлов, прикрепленных к заявке
+      tags:
+        - Files
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID заявки
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Список файлов
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileListResponse'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /files/upload:
+    post:
+      summary: Загрузить файл
+      description: Загружает файл для заявки
+      tags:
+        - Files
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                application_id:
+                  type: integer
+                category:
+                  type: string
+                description:
+                  type: string
+              required:
+                - file
+                - application_id
+      responses:
+        '201':
+          description: Файл загружен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/File'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          description: Файл слишком большой
+
+  /files/{id}:
+    delete:
+      summary: Удалить файл
+      description: Удаляет файл
+      tags:
+        - Files
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID файла
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Файл удален
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+    get:
+      summary: Скачать файл
+      description: Скачивает файл
+      tags:
+        - Files
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: ID файла
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Файл
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /scoring/run/{applicationId}:
+    post:
+      summary: Запустить скоринг
+      description: Запускает скоринг заявки
+      tags:
+        - Scoring
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          description: ID заявки
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Скоринг запущен
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /scoring/result/{applicationId}:
+    get:
+      summary: Получить результат скоринга
+      description: Возвращает результат скоринга заявки
+      tags:
+        - Scoring
+      parameters:
+        - name: applicationId
+          in: path
+          required: true
+          description: ID заявки
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Результат скоринга
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ScoringResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Application:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 123
+        client_id:
+          type: integer
+          example: 456
+        type:
+          type: string
+          enum: [credit, guarantee]
+          example: credit
+        amount:
+          type: number
+          format: float
+          example: 1000000.0
+        status:
+          type: string
+          enum: [draft, submitted, in_review, approved, rejected, completed]
+          example: submitted
+        bank:
+          type: string
+          example: Сбербанк
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+        personal_data:
+          type: object
+        contact_data:
+          type: object
+        professional_data:
+          type: object
+        financial_data:
+          type: object
+        family_data:
+          type: object
+        additional_data:
+          type: object
+        status_history:
+          type: array
+          items:
+            $ref: '#/components/schemas/StatusHistory'
+
+    StatusHistory:
+      type: object
+      properties:
+        id:
+          type: integer
+        application_id:
+          type: integer
+        status:
+          type: string
+        timestamp:
+          type: string
+          format: date-time
+        comment:
+          type: string
+
+    CreateApplicationRequest:
+      type: object
+      required:
+        - type
+        - personalData
+        - contactData
+        - professionalData
+        - financialData
+        - familyData
+        - additionalData
+      properties:
+        type:
+          type: string
+          enum: [credit, guarantee]
+          example: credit
+        amount:
+          type: number
+          format: float
+          example: 1000000.0
+        personalData:
+          type: object
+          description: Личные данные
+        contactData:
+          type: object
+          description: Контактные данные
+        professionalData:
+          type: object
+          description: Профессиональные данные
+        financialData:
+          type: object
+          description: Финансовые данные
+        familyData:
+          type: object
+          description: Семейные данные
+        additionalData:
+          type: object
+          description: Дополнительные данные
+
+    UpdateApplicationRequest:
+      type: object
+      required:
+        - step
+        - data
+      properties:
+        step:
+          type: string
+          enum: [personal, contact, professional, financial, family, additional]
+          example: personal
+        data:
+          type: object
+          description: Данные шага
+
+    GetApplicationsResponse:
+      type: object
+      properties:
+        applications:
+          type: array
+          items:
+            $ref: '#/components/schemas/Application'
+        total:
+          type: integer
+          example: 100
+        page:
+          type: integer
+          example: 1
+        limit:
+          type: integer
+          example: 10
+
+    File:
+      type: object
+      properties:
+        id:
+          type: integer
+        application_id:
+          type: integer
+        file_name:
+          type: string
+        original_name:
+          type: string
+        file_path:
+          type: string
+        file_size:
+          type: integer
+        mime_type:
+          type: string
+        file_hash:
+          type: string
+        uploaded_at:
+          type: string
+          format: date-time
+        is_deleted:
+          type: boolean
+        metadata:
+          type: object
+
+    FileListResponse:
+      type: object
+      properties:
+        files:
+          type: array
+          items:
+            $ref: '#/components/schemas/File'
+        total:
+          type: integer
+
+    ScoringResult:
+      type: object
+      properties:
+        score:
+          type: number
+          format: float
+          example: 85.5
+        risk_class:
+          type: string
+          enum: [A, B, C]
+          example: A
+        reasons:
+          type: array
+          items:
+            type: string
+          example: ["Высокий доход", "Стабильная работа", "Чистая кредитная история"]
+        version:
+          type: string
+          example: "1.0"
+        timestamp:
+          type: string
+          format: date-time
+        thresholds:
+          type: object
+          properties:
+            class_a:
+              type: number
+              format: float
+            class_b:
+              type: number
+              format: float
+            class_c:
+              type: number
+              format: float
+        detailed_scores:
+          type: object
+          additionalProperties:
+            type: number
+            format: float
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "Описание ошибки"
+        code:
+          type: integer
+          example: 400
+        message:
+          type: string
+          example: "Bad Request"
+
+  responses:
+    BadRequest:
+      description: Некорректный запрос
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    Unauthorized:
+      description: Не авторизован
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    NotFound:
+      description: Ресурс не найден
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+    InternalServerError:
+      description: Внутренняя ошибка сервера
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+
+tags:
+  - name: Applications
+    description: Управление заявками
+  - name: Files
+    description: Управление файлами
+  - name: Scoring
+    description: Система скоринга
